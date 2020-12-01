@@ -8,28 +8,37 @@ public class Player : MonoBehaviour
     [SerializeField] float moveSpeed = 10f;
     [SerializeField] float jumpSpeed = 5f;
 
-
     // Player State
     bool isAlive = true;
-    bool isGrounded = true;
+    int jumpPressedTimes;
+
+    // Constants
+    const int INITIAL_JUMP_VALUE = 1;
+    const int MAX_JUMP_VALUE = 2;
 
     //Cached references
     Rigidbody2D playerRigidBody;
     Animator animator;
+    CapsuleCollider2D bodyCollider;
+    BoxCollider2D feetCollider;
 
     // Start is called before the first frame update
     void Start()
     {
         playerRigidBody = GetComponent<Rigidbody2D>();
         animator = GetComponent<Animator>();
+        bodyCollider = GetComponent<CapsuleCollider2D>();
+        feetCollider = GetComponent<BoxCollider2D>();
     }
 
     // Update is called once per frame
     void Update()
     {
+        if (!isAlive) { return; }
         Run();
         Jump();
         FlipSprite();
+        Die();
     }
 
     public void Run()
@@ -41,10 +50,12 @@ public class Player : MonoBehaviour
 
     public void Jump()
     {
+        if (!IsGrounded() && jumpPressedTimes >= MAX_JUMP_VALUE) { return; }
         if (Input.GetButtonDown("Jump"))
         {
             Vector2 jumpVelocityToAdd = new Vector2(playerRigidBody.velocity.x, jumpSpeed);
             playerRigidBody.velocity += jumpVelocityToAdd;
+            jumpPressedTimes++;
         }
     }
 
@@ -60,36 +71,46 @@ public class Player : MonoBehaviour
 
     private void DetectAnimationState(bool playerHasHorizontalSpeed)
     {
-        if (playerHasHorizontalSpeed && isGrounded)
+        if (playerHasHorizontalSpeed && IsGrounded())
         {
             animator.SetBool("isRunning", true);
             animator.SetBool("isJumping", false);
+            animator.SetBool("isDoubleJumping", false);
+            jumpPressedTimes = INITIAL_JUMP_VALUE;
         }
-        else if (!isGrounded)
+        else if (!IsGrounded())
         {
             animator.SetBool("isRunning", false);
             animator.SetBool("isJumping", true);
+
+            if (jumpPressedTimes == MAX_JUMP_VALUE)
+            {
+                animator.SetBool("isRunning", false);
+                animator.SetBool("isJumping", false);
+                animator.SetBool("isDoubleJumping", true);
+            }
         }
         else
         {
+            jumpPressedTimes = INITIAL_JUMP_VALUE;
+            animator.SetBool("isDoubleJumping", false);
             animator.SetBool("isJumping", false);
             animator.SetBool("isRunning", false);
         }
     }
 
-    private void OnCollisionEnter2D(Collision2D otherCollision)
+    private bool IsGrounded()
     {
-        if (otherCollision.gameObject.tag.Equals("Ground"))
-        {
-            isGrounded = true;
-        }
+        return feetCollider.IsTouchingLayers(LayerMask.GetMask("Ground"));
     }
 
-    private void OnCollisionExit2D(Collision2D otherCollision)
+    private void Die()
     {
-        if (otherCollision.gameObject.tag.Equals("Ground"))
+        if (bodyCollider.IsTouchingLayers(LayerMask.GetMask("Enemy", "Hazards")))
         {
-            isGrounded = false;
+            isAlive = false;
+            animator.SetTrigger("Die");
         }
+
     }
 }
